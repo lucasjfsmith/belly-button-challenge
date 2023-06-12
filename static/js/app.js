@@ -13,24 +13,25 @@ function populateDropdown(data){
         let newOption = dropdownMenu.append("option");
         newOption.attr("value", data.names[i]);
         newOption.text(data.names[i]);
-    };
-    dropdownMenu.attr("value", dropdownMenu.node().value);
+    }
 };
 
+// Function to return the sample that matches the dropdown selection
 function currentSample(data) {
     let sample = {};
     for (i=0; i<data.samples.length; i++) {
-        if (dropdownMenu.attr("value") == data.samples[i].id) {
+        if (dropdownMenu.node().value == data.samples[i].id) {
             sample = data.samples[i];
         };
     };
     return sample
 };
 
+// Function to populate the demographic information
 function populateDemographics(data) {
     let subjectMetadata = {};
     for (i=0; i<data.metadata.length; i++) {
-        if (dropdownMenu.attr("value") == String(data.metadata[i].id)) {
+        if (dropdownMenu.node().value == data.metadata[i].id) {
             subjectMetadata = data.metadata[i];
         };
     };
@@ -83,7 +84,7 @@ function init(data) {
     console.log(topTenSamples);
 
     // Build trace of top ten sample values
-    let trace = {
+    let barTrace = {
         x: topTenSamples.map(sample => sample.sample_value),
         y: topTenSamples.map(sample => sample.otu_id),
         text: topTenSamples.map(sample => sample.otu_label),
@@ -91,13 +92,95 @@ function init(data) {
         orientation: 'h'
     };
     
-    let layout = {
-        title: `Top 10 Sample Values for Subject ${dropdownMenu.attr("value")}`
+    let barLayout = {
+        title: `Top 10 Sample Values for Subject ${dropdownMenu.node().value}`,
+        height: 700,
+        width: 1000
     }
 
-    let traceData = [trace];
-    Plotly.newPlot("bar", traceData, layout);
+    let barTraceData = [barTrace];
+    Plotly.newPlot("bar", barTraceData, barLayout);
 
+    // CREATE BUBBLE CHART
+    let bubbleTrace = {
+        x: sample.otu_ids.map(oid => oid),
+        y: sample.sample_values.map(value => value),
+        text: sample.otu_labels.map(label => label),
+        mode: 'markers',
+        marker: {
+            color: sample.otu_ids.map(oid => oid),
+            size: sample.sample_values.map(value => value)
+        }
+      };
+    
+    let bubbleTraceData = [bubbleTrace];
+
+    let bubbleLayout = {
+        title: `Subject ${dropdownMenu.node().value} Bubble Chart of Sample Values`,
+        xaxis: {title: "OTU IDs"},
+        showlegend: false,
+        height: 700,
+        width: 1000
+      };
+    
+    Plotly.newPlot("bubble", bubbleTraceData, bubbleLayout);
 };
 
+function updateCharts(data) {
+    // POPULATE DEMOGRAPHICS
+    populateDemographics(data);
+
+    // Get the current sample based on the dropdown
+    let sample = currentSample(data);
+    console.log(sample);
+
+    // Put samples into an array of objects
+    let samplesArray = [];
+    for (i=0; i<sample.otu_ids.length; i++) {
+        let newSample = {};
+        newSample.otu_id = `OTU ${String(sample.otu_ids[i])}`;
+        newSample.sample_value = sample.sample_values[i];
+        newSample.otu_label = sample.otu_labels[i];
+        samplesArray.push(newSample)
+
+    };
+    console.log(samplesArray);
+
+    // Get the top 10 values based on sample_value then order those in ascending order for Plotly
+    let topTenSamples = samplesArray.sort(function(a,b) {
+        return b.sample_value - a.sample_value;
+    }).slice(0,10).reverse();
+    console.log(topTenSamples);
+
+    let updateBarX = topTenSamples.map(sample => sample.sample_value);
+    let updateBarY = topTenSamples.map(sample => sample.otu_id);
+    let updateBarText = topTenSamples.map(sample => sample.otu_label);
+    
+    // Restyle bar chart
+    Plotly.restyle("bar", "x", [updateBarX]);
+    Plotly.restyle("bar", "y", [updateBarY]);
+    Plotly.restyle("bar", "text", [updateBarText]);
+    Plotly.relayout("bar", "title", `Top 10 Sample Values for Subject ${dropdownMenu.node().value}`);
+
+     // UPDATE BUBBLE CHART
+    let updateBubbleOid = sample.otu_ids.map(oid => oid);
+    let updateBubbleValue =  sample.sample_values.map(value => value);
+    let updateBubbleText = sample.otu_labels.map(label => label);
+
+    // Restyle bubble chart
+    Plotly.restyle("bubble", "x", [updateBubbleOid]);
+    Plotly.restyle("bubble", "y", [updateBubbleValue]);
+    Plotly.restyle("bubble", "text", [updateBubbleText]);
+    Plotly.restyle("bubble", "marker.color", [updateBubbleOid]);
+    Plotly.restyle("bubble", "marker.size", [updateBubbleValue]);
+
+    Plotly.relayout("bubble", "title", `Subject ${dropdownMenu.node().value} Bubble Chart of Sample Values`);
+};
+
+// Function to execute when the dropdown selection is changed
+function optionChanged() {
+    samplesPromise.then(updateCharts);
+};
+
+// Initialize the webpage
 samplesPromise.then(init);
